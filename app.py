@@ -99,7 +99,7 @@ if uploaded:
                 y_line = slope * x_line + intercept
                 ax.plot(x_line, y_line, color=TREND_COLORS[i % len(TREND_COLORS)],
                         linewidth=1.5, linestyle='--',
-                        label=f'{y_col} 추세선: y={slope:.4f}x+{intercept:.4f}')
+                        label='_nolegend_')
 
         if trendline:
             st.markdown("### 📐 선형 회귀 결과")
