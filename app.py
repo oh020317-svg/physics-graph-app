@@ -24,7 +24,8 @@ def setup_font():
 font_ok = setup_font()
 
 st.set_page_config(page_title="물리실험 그래프 도구", layout="centered")
-st.title("📊 일반물리학실험 그래프 생성 도구 by 하람")
+st.title("📊 일반물리학실험 그래프 생성 도구 by")
+st.write('by 하람')
 
 uploaded = st.file_uploader("엑셀 또는 CSV 파일을 업로드하세요", type=["xlsx", "xls", "csv"])
 
