@@ -21,11 +21,10 @@ def setup_font():
     plt.rcParams['axes.unicode_minus'] = False
     return True
 
-font_ok = setup_font()
+setup_font()
 
-st.set_page_config(page_title="물리실험 그래프 도구", layout="centered")
-st.title("📊 일반물리학실험 그래프 생성 도구")
-st.write('by 하람')
+st.set_page_config(page_title="물리실험 데이터 시각화 도구", layout="centered")
+st.title("📊 물리실험 데이터 시각화 도구")
 
 uploaded = st.file_uploader("엑셀 또는 CSV 파일을 업로드하세요", type=["xlsx", "xls", "csv"])
 
@@ -39,7 +38,6 @@ if uploaded:
         st.error(f"파일 읽기 오류: {e}")
         st.stop()
 
-    # 숫자형 컬럼만 추출
     numeric_cols = []
     for col in df.columns:
         converted = pd.to_numeric(df[col], errors='coerce')
@@ -56,20 +54,29 @@ if uploaded:
 
     st.markdown("---")
 
+    graph_type = st.selectbox("그래프 종류 선택", [
+        "산점도 + 선형 추세선",
+        "산점도 + 2차 곡선 피팅",
+        "꺾은선 그래프",
+        "막대 그래프"
+    ])
+
     col1, col2 = st.columns(2)
     with col1:
         x_col = st.selectbox("x축 컬럼", numeric_cols, index=0)
         x_label = st.text_input("x축 레이블", value=numeric_cols[0])
     with col2:
-        y_cols = st.multiselect(
-            "y축 컬럼 (여러 개 선택 가능)",
-            [c for c in numeric_cols if c != x_col],
-            default=[numeric_cols[1]] if len(numeric_cols) > 1 else []
-        )
+        if graph_type == "막대 그래프":
+            y_cols = st.multiselect("y축 컬럼 (여러 개 선택 가능)",
+                [c for c in numeric_cols if c != x_col],
+                default=[numeric_cols[1]] if len(numeric_cols) > 1 else [])
+        else:
+            y_cols = st.multiselect("y축 컬럼 (여러 개 선택 가능)",
+                [c for c in numeric_cols if c != x_col],
+                default=[numeric_cols[1]] if len(numeric_cols) > 1 else [])
         y_label = st.text_input("y축 레이블", value=", ".join(y_cols) if y_cols else "")
 
     title = st.text_input("그래프 제목", value="그래프")
-    trendline = st.checkbox("선형 추세선 표시", value=True)
 
     COLORS = ['steelblue', 'tomato', 'seagreen', 'darkorange', 'mediumpurple']
     TREND_COLORS = ['#1a5276', '#922b21', '#1e8449', '#9c5a00', '#5b2c8d']
@@ -83,45 +90,36 @@ if uploaded:
         fig, ax = plt.subplots(figsize=(8, 5))
 
         for i, y_col in enumerate(y_cols):
-            y_raw = pd.to_numeric(df[y_col], errors='coerce')
-            mask = y_raw.notna()
-            xi = x[:mask.sum()] if len(x) >= mask.sum() else x
-            yi = y_raw.dropna().values[:len(xi)]
-            min_len = min(len(xi), len(yi))
-            xi, yi = xi[:min_len], yi[:min_len]
-
+            y_raw = pd.to_numeric(df[y_col], errors='coerce').dropna().values
+            min_len = min(len(x), len(y_raw))
+            xi, yi = x[:min_len], y_raw[:min_len]
             color = COLORS[i % len(COLORS)]
-            ax.scatter(xi, yi, color=color, s=40, zorder=3, label=f'{y_col} 측정값')
+            trend_color = TREND_COLORS[i % len(TREND_COLORS)]
 
-            if trendline and len(xi) >= 2:
-                coeffs = np.polyfit(xi, yi, 1)
-                slope, intercept = coeffs
-                x_line = np.linspace(xi.min(), xi.max(), 200)
-                y_line = slope * x_line + intercept
-                ax.plot(x_line, y_line, color=TREND_COLORS[i % len(TREND_COLORS)],
-                        linewidth=1.5, linestyle='--',
-                        label='_nolegend_')
-
-        if trendline:
-            st.markdown("### 📐 선형 회귀 결과")
-            result_cols = st.columns(len(y_cols))
-            for i, y_col in enumerate(y_cols):
-                y_raw = pd.to_numeric(df[y_col], errors='coerce').dropna().values
-                xi = x[:len(y_raw)]
-                min_len = min(len(xi), len(y_raw))
-                xi, yi = xi[:min_len], y_raw[:min_len]
+            if graph_type == "산점도 + 선형 추세선":
+                ax.scatter(xi, yi, color=color, s=40, zorder=3, label=f'{y_col}')
                 if len(xi) >= 2:
                     coeffs = np.polyfit(xi, yi, 1)
-                    slope, intercept = coeffs
-                    y_pred = slope * xi + intercept
-                    ss_res = np.sum((yi - y_pred)**2)
-                    ss_tot = np.sum((yi - np.mean(yi))**2)
-                    r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 0
-                    with result_cols[i]:
-                        st.markdown(f"**{y_col}**")
-                        st.metric("기울기", f"{slope:.5f}")
-                        st.metric("절편", f"{intercept:.5f}")
-                        st.metric("R²", f"{r2:.5f}")
+                    x_line = np.linspace(xi.min(), xi.max(), 200)
+                    ax.plot(x_line, np.polyval(coeffs, x_line),
+                            color=trend_color, linewidth=1.5, linestyle='--', label='_nolegend_')
+
+            elif graph_type == "산점도 + 2차 곡선 피팅":
+                ax.scatter(xi, yi, color=color, s=40, zorder=3, label=f'{y_col}')
+                if len(xi) >= 3:
+                    coeffs = np.polyfit(xi, yi, 2)
+                    x_line = np.linspace(xi.min(), xi.max(), 200)
+                    ax.plot(x_line, np.polyval(coeffs, x_line),
+                            color=trend_color, linewidth=1.5, linestyle='--', label='_nolegend_')
+
+            elif graph_type == "꺾은선 그래프":
+                ax.plot(xi, yi, color=color, linewidth=1.8, marker='o',
+                        markersize=5, label=f'{y_col}')
+
+            elif graph_type == "막대 그래프":
+                width = (xi.max() - xi.min()) / len(xi) * 0.7 / len(y_cols)
+                offset = (i - len(y_cols) / 2 + 0.5) * width
+                ax.bar(xi + offset, yi, width=width, color=color, alpha=0.8, label=f'{y_col}')
 
         ax.set_xlabel(x_label, fontsize=12)
         ax.set_ylabel(y_label, fontsize=12)
@@ -131,6 +129,32 @@ if uploaded:
         plt.tight_layout()
 
         st.pyplot(fig)
+
+        # 선형/2차 회귀 결과 출력
+        if graph_type in ["산점도 + 선형 추세선", "산점도 + 2차 곡선 피팅"]:
+            st.markdown("### 📐 회귀 결과")
+            result_cols = st.columns(len(y_cols))
+            for i, y_col in enumerate(y_cols):
+                y_raw = pd.to_numeric(df[y_col], errors='coerce').dropna().values
+                min_len = min(len(x), len(y_raw))
+                xi, yi = x[:min_len], y_raw[:min_len]
+                with result_cols[i]:
+                    st.markdown(f"**{y_col}**")
+                    if graph_type == "산점도 + 선형 추세선" and len(xi) >= 2:
+                        coeffs = np.polyfit(xi, yi, 1)
+                        y_pred = np.polyval(coeffs, xi)
+                        r2 = 1 - np.sum((yi - y_pred)**2) / np.sum((yi - np.mean(yi))**2)
+                        st.metric("기울기", f"{coeffs[0]:.5f}")
+                        st.metric("절편", f"{coeffs[1]:.5f}")
+                        st.metric("R²", f"{r2:.5f}")
+                    elif graph_type == "산점도 + 2차 곡선 피팅" and len(xi) >= 3:
+                        coeffs = np.polyfit(xi, yi, 2)
+                        y_pred = np.polyval(coeffs, xi)
+                        r2 = 1 - np.sum((yi - y_pred)**2) / np.sum((yi - np.mean(yi))**2)
+                        st.metric("a (x²)", f"{coeffs[0]:.5f}")
+                        st.metric("b (x)", f"{coeffs[1]:.5f}")
+                        st.metric("c (상수)", f"{coeffs[2]:.5f}")
+                        st.metric("R²", f"{r2:.5f}")
 
         buf = BytesIO()
         fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
