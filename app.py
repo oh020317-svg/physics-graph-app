@@ -32,8 +32,12 @@ if uploaded:
     try:
         if uploaded.name.endswith(".csv"):
             df = pd.read_csv(uploaded)
+            sheet_name = None
         else:
-            df = pd.read_excel(uploaded)
+            xl = pd.ExcelFile(uploaded)
+            sheet_names = xl.sheet_names
+            sheet_name = st.selectbox("시트 선택", sheet_names)
+            df = pd.read_excel(uploaded, sheet_name=sheet_name)
     except Exception as e:
         st.error(f"파일 읽기 오류: {e}")
         st.stop()
@@ -49,7 +53,7 @@ if uploaded:
         st.error("숫자 데이터가 있는 컬럼이 2개 이상 필요해요.")
         st.stop()
 
-    st.success(f"파일 로드 완료! ({df.shape[0]}행 × {df.shape[1]}열)")
+    st.success(f"'{sheet_name}' 시트 로드 완료! ({df.shape[0]}행 × {df.shape[1]}열)")
     st.write("데이터 미리보기:", df[numeric_cols].head())
 
     st.markdown("---")
@@ -66,17 +70,14 @@ if uploaded:
         x_col = st.selectbox("x축 컬럼", numeric_cols, index=0)
         x_label = st.text_input("x축 레이블", value=numeric_cols[0])
     with col2:
-        if graph_type == "막대 그래프":
-            y_cols = st.multiselect("y축 컬럼 (여러 개 선택 가능)",
-                [c for c in numeric_cols if c != x_col],
-                default=[numeric_cols[1]] if len(numeric_cols) > 1 else [])
-        else:
-            y_cols = st.multiselect("y축 컬럼 (여러 개 선택 가능)",
-                [c for c in numeric_cols if c != x_col],
-                default=[numeric_cols[1]] if len(numeric_cols) > 1 else [])
+        y_cols = st.multiselect(
+            "y축 컬럼 (여러 개 선택 가능)",
+            [c for c in numeric_cols if c != x_col],
+            default=[numeric_cols[1]] if len(numeric_cols) > 1 else []
+        )
         y_label = st.text_input("y축 레이블", value=", ".join(y_cols) if y_cols else "")
 
-    title = st.text_input("그래프 제목", value="그래프")
+    title = st.text_input("그래프 제목", value=f"{sheet_name} 그래프" if sheet_name else "그래프")
 
     COLORS = ['steelblue', 'tomato', 'seagreen', 'darkorange', 'mediumpurple']
     TREND_COLORS = ['#1a5276', '#922b21', '#1e8449', '#9c5a00', '#5b2c8d']
@@ -130,7 +131,6 @@ if uploaded:
 
         st.pyplot(fig)
 
-        # 선형/2차 회귀 결과 출력
         if graph_type in ["산점도 + 선형 추세선", "산점도 + 2차 곡선 피팅"]:
             st.markdown("### 📐 회귀 결과")
             result_cols = st.columns(len(y_cols))
